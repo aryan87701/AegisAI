@@ -40,7 +40,7 @@ export default function LoginForm() {
 
     const onSubmit = async (data: FormData) => {
         const auth = getAuth(app);
-        // The URL we want to redirect to after clicking the link
+        
         const actionCodeSettings = {
             url: window.location.origin + "/authpage?mode=login",
             handleCodeInApp: true,

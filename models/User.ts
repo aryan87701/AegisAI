@@ -7,7 +7,6 @@ const UserSchema = new mongoose.Schema(
       required: true,
       unique: true,
     },
-    // uid is the Firebase auth user ID
     uid: {
       type: String,
       required: true,
@@ -45,7 +44,6 @@ const UserSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Prevent mongoose from recompiling the model upon hot reload
 const User = mongoose.models.User || mongoose.model("User", UserSchema);
 
 export default User;

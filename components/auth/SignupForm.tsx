@@ -47,7 +47,7 @@ export default function SignupForm() {
         try {
             const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
             
-            // Basic User Initialization in MongoDB
+           
             await fetch("/api/auth/sync", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -57,7 +57,7 @@ export default function SignupForm() {
                 }),
             });
 
-            // Redirect to profile setup page
+            
             router.push("/profile");
         } catch (error: unknown) {
             console.error(error);
