@@ -45,19 +45,7 @@ export default function Home() {
           </Button>
         </div>
 
-        {/* Features preview */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-16 w-full max-w-3xl">
-          {[
-            { title: "24/7 Chatbot", desc: "Intelligent support anytime you need it." },
-            { title: "Secure Evidence", desc: "Safely store and manage incident data." },
-            { title: "Encrypted Keys", desc: "Privacy assured with your own secret key." }
-          ].map((feature, i) => (
-            <div key={i} className="flex flex-col items-center bg-white/60 backdrop-blur-md p-6 rounded-2xl border border-white outline outline-1 outline-zinc-200/50 shadow-sm">
-              <h3 className="font-semibold text-zinc-900 mb-2">{feature.title}</h3>
-              <p className="text-sm text-zinc-500 text-center">{feature.desc}</p>
-            </div>
-          ))}
-        </div>
+       
       </div>
     </main>
   );
