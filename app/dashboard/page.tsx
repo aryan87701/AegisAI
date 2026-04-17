@@ -16,6 +16,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useTheme } from "next-themes";
+import { Moon, Sun } from "lucide-react";
 import EvidenceSection from "@/components/dashboard/EvidenceSection";
 import ChatbotSection from "@/components/dashboard/ChatbotSection";
 
@@ -33,6 +35,7 @@ export default function DashboardPage() {
     const [showKeyModal, setShowKeyModal] = useState(false);
     const [enteredKey, setEnteredKey] = useState("");
     const [keyError, setKeyError] = useState(false);
+    const { theme, setTheme } = useTheme();
 
     useEffect(() => {
         const auth = getAuth(app);
@@ -95,7 +98,7 @@ export default function DashboardPage() {
     if (!userRecord) return null;
 
     return (
-        <div className="min-h-screen bg-zinc-50 relative">
+        <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 relative text-zinc-900 dark:text-zinc-100">
             <Dialog open={showKeyModal} onOpenChange={() => {}}>
                 <DialogContent className="sm:max-w-md [&>button]:hidden">
                     <DialogHeader>
@@ -129,7 +132,7 @@ export default function DashboardPage() {
             {/* Dashboard Content */}
             <div className={`transition-all duration-300 ${showKeyModal ? "blur-md pointer-events-none" : ""}`}>
                 {/* Header */}
-                <header className="bg-white border-b border-zinc-200 px-6 py-4 flex items-center justify-between">
+                <header className="bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 px-6 py-4 flex items-center justify-between">
                     <div className="flex items-center gap-4">
                         <div className="relative group cursor-pointer" onClick={() => router.push("/profile")}>
                             <Avatar className="h-10 w-10 border-2 border-transparent transition-all group-hover:border-blue-500">
@@ -141,23 +144,35 @@ export default function DashboardPage() {
                             </div>
                         </div>
                         <div>
-                            <h1 className="text-xl font-bold tracking-tight text-zinc-900">AegisAI Dashboard</h1>
-                            <p className="text-sm text-zinc-500">Welcome back, {userRecord.name}</p>
+                            <h1 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">AegisAI Dashboard</h1>
+                            <p className="text-sm text-zinc-500 dark:text-zinc-400">Welcome back, {userRecord.name}</p>
                         </div>
                     </div>
 
-                    <Button variant="outline" size="sm" onClick={handleLogout} className="text-red-600 hover:text-red-700 hover:bg-red-50 hover:border-red-200">
-                        Logout
-                    </Button>
+                    <div className="flex items-center gap-3">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                            className="text-zinc-600 dark:text-zinc-400"
+                        >
+                            <Sun className="h-5 w-5 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+                            <Moon className="absolute h-5 w-5 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+                            <span className="sr-only">Toggle theme</span>
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={handleLogout} className="text-red-600 hover:text-red-700 hover:bg-red-50 hover:border-red-200 dark:hover:bg-red-950/30 dark:hover:border-red-900">
+                            Logout
+                        </Button>
+                    </div>
                 </header>
 
                 {/* Main Content Area */}
                 <main className="p-6 max-w-5xl mx-auto space-y-6">
                     <Tabs defaultValue="evidence" className="w-full">
                         <div className="flex justify-center w-full mb-8">
-                            <TabsList className="grid grid-cols-2 w-full max-w-xs h-12 bg-white border border-zinc-200 rounded-full p-1 shadow-sm">
-                                <TabsTrigger value="evidence" className="rounded-full data-[state=active]:bg-zinc-900 data-[state=active]:text-white transition-all text-sm font-medium">Evidence</TabsTrigger>
-                                <TabsTrigger value="chatbot" className="rounded-full data-[state=active]:bg-zinc-900 data-[state=active]:text-white transition-all text-sm font-medium">Chatbot</TabsTrigger>
+                            <TabsList className="grid grid-cols-2 w-full max-w-xs h-12 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-full p-1 shadow-sm">
+                                <TabsTrigger value="evidence" className="rounded-full data-[state=active]:bg-zinc-900 dark:data-[state=active]:bg-zinc-100 data-[state=active]:text-white dark:data-[state=active]:text-zinc-900 transition-all text-sm font-medium">Evidence</TabsTrigger>
+                                <TabsTrigger value="chatbot" className="rounded-full data-[state=active]:bg-zinc-900 dark:data-[state=active]:bg-zinc-100 data-[state=active]:text-white dark:data-[state=active]:text-zinc-900 transition-all text-sm font-medium">Chatbot</TabsTrigger>
                             </TabsList>
                         </div>
                         
