@@ -1,5 +1,5 @@
 "use client";
-
+import Emergencybutton from "@/components/Emergencybutton";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getAuth, signOut, onAuthStateChanged } from "firebase/auth";
@@ -198,6 +198,7 @@ export default function DashboardPage() {
                         </TabsContent>
                 </main>
             </Tabs>
+            <Emergencybutton />
         </div>
     );
-}
+}   

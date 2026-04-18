@@ -40,6 +40,15 @@ const UserSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    trustedContacts: {
+  type: [String],
+  default: []
+},
+
+emergencyMessage: {
+  type: String,
+  default: "I need help. Please reach me."
+}
   },
   { timestamps: true }
 );

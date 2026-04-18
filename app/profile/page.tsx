@@ -46,6 +46,37 @@ export default function ProfilePage() {
     const [isUploading, setIsUploading] = useState(false);
     const [enableSecretKey, setEnableSecretKey] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [contacts, setContacts] = useState<string[]>([]);
+const [contactInput, setContactInput] = useState("");
+const [emergencyMessage, setEmergencyMessage] = useState("");
+const addContact = () => {
+  const formatted = contactInput.trim(); // 🔥 FIX
+
+  if (!formatted) return;
+
+  if (!formatted.startsWith("+")) {
+    alert("Use format +91XXXXXXXXXX");
+    return;
+  }
+
+  if (formatted.length < 10) {
+    alert("Invalid number");
+    return;
+  }
+
+  if (contacts.includes(formatted)) {
+    alert("Already added");
+    return;
+  }
+
+  if (contacts.length >= 3) {
+    alert("Max 3 contacts allowed");
+    return;
+  }
+
+  setContacts((prev) => [...prev, formatted]);
+  setContactInput("");
+};
 
     const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -114,22 +145,29 @@ export default function ProfilePage() {
                     
                     if (res.ok) {
                         const data = await res.json();
-                        if (data.user && data.user.isProfileComplete) {
-                            setIsEditing(true);
-                            reset({
-                                name: data.user.name || "",
-                                age: data.user.age || "",
-                                gender: data.user.gender || undefined,
-                                maritalStatus: data.user.maritalStatus || undefined,
-                                secretKey: data.user.secretKey || "",
-                            });
-                            if (data.user.profilePicUrl) {
-                                setProfilePic(data.user.profilePicUrl);
-                            }
-                            if (data.user.secretKey) {
-                                setEnableSecretKey(true);
-                            }
-                        }
+                       if (data.user && data.user.isProfileComplete) {
+  setIsEditing(true);
+
+  reset({
+    name: data.user.name || "",
+    age: data.user.age || "",
+    gender: data.user.gender || undefined,
+    maritalStatus: data.user.maritalStatus || undefined,
+    secretKey: data.user.secretKey || "",
+  });
+
+  if (data.user.profilePicUrl) {
+    setProfilePic(data.user.profilePicUrl);
+  }
+
+  if (data.user.secretKey) {
+    setEnableSecretKey(true);
+  }
+
+  // 🔥 ADD THIS
+  setContacts(data.user.trustedContacts || []);
+  setEmergencyMessage(data.user.emergencyMessage || "");
+}
                     }
                 } catch (error) {
                     console.error("Failed to load existing profile:", error);
@@ -159,10 +197,14 @@ export default function ProfilePage() {
             const res = await fetch("/api/auth/profile", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ ...data, uid, profilePicUrl: profilePic }),
+                body: JSON.stringify({ ...data, uid, profilePicUrl: profilePic,  trustedContacts: contacts,     
+  emergencyMessage: emergencyMessage }),
             });
 
-            if (!res.ok) throw new Error("Failed to save profile");
+          const result = await res.json();
+console.log("PROFILE RESPONSE:", result);
+
+if (!res.ok) throw new Error(result.error || "Failed to save profile");
 
             router.push("/dashboard");
         } catch (error: unknown) {
@@ -290,6 +332,76 @@ export default function ProfilePage() {
                                     </div>
                                 )}
                             </div>
+{/* 🔥 Trusted Contacts Section */}
+<div className="pt-6 border-t border-zinc-100">
+  <Label className="text-base font-semibold mb-2 block">
+    Trusted Contacts
+  </Label>
+
+  {/* Input */}
+  <div className="flex gap-2 mb-3">
+    <Input
+      placeholder="+91XXXXXXXXXX"
+      value={contactInput}
+      onChange={(e) => setContactInput(e.target.value)}
+    />
+    <Button
+      type="button"
+      onClick={addContact}
+      disabled={!contactInput}
+    >
+      Add
+    </Button>
+  </div>
+
+  {/* Contact List */}
+  <div className="space-y-2 mb-4">
+    {contacts.map((c, i) => (
+      <div
+        key={i}
+         className="flex justify-between items-center bg-zinc-800/50 px-3 py-2 rounded-lg border border-zinc-700"
+      >
+        <span className="text-sm">{c}</span>
+        <button
+          type="button"
+          onClick={() => removeContact(i)}
+          className="text-red-500 text-sm"
+        >
+          Remove
+        </button>
+      </div>
+    ))}
+  </div>
+
+  {/* Message */}
+  <Label className="text-sm mb-1 block">
+    Emergency Message
+  </Label>
+
+  <textarea
+    value={emergencyMessage}
+    onChange={(e) => setEmergencyMessage(e.target.value)}
+    placeholder="I need help"
+   className="
+    w-full
+    rounded-xl
+    border border-zinc-700
+    bg-zinc-900/60
+    text-zinc-200
+    placeholder:text-zinc-500
+    p-3
+    text-sm
+    resize-none
+    min-h-[100px]
+    focus:outline-none
+    focus:ring-2
+    focus:ring-zinc-500
+    focus:border-zinc-500
+    transition
+    duration-200
+  "
+  />
+</div>
 
                             <Button 
                                 type="button"

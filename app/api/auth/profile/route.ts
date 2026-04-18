@@ -5,7 +5,8 @@ import User from "@/models/User";
 export async function POST(req: Request) {
   try {
     const data = await req.json();
-    const { uid, name, age, gender, maritalStatus, profilePicUrl, secretKey } = data;
+    const { uid, name, age, gender, maritalStatus, profilePicUrl, secretKey,   trustedContacts,  
+      emergencyMessage   } = data;
 
     if (!uid) {
       return NextResponse.json({ error: "Missing required UID" }, { status: 400 });
@@ -16,15 +17,17 @@ export async function POST(req: Request) {
     const user = await User.findOneAndUpdate(
       { uid },
       { 
-        $set: {
-          name,
-          age,
-          gender,
-          maritalStatus,
-          profilePicUrl,
-          secretKey,
-          isProfileComplete: true
-        }
+  $set: {
+  name,
+  age,
+  gender,
+  maritalStatus,
+  profilePicUrl,
+  secretKey,
+  isProfileComplete: true,
+  emergencyMessage: emergencyMessage || "",
+  ...(trustedContacts !== undefined && { trustedContacts }) 
+}
       },
       { returnDocument: 'after' }
     );
