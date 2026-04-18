@@ -105,7 +105,7 @@ const handleCall = async () => {
       {/* Floating Button */}
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 bg-red-800 text-white p-4 rounded-full z-50 hover:bg-gray-800 cursor-pointer"
+        className="fixed bottom-6 right-6 bg-[#B21563] text-white p-4 rounded-xl z-50 hover:bg-[#911050] cursor-pointer shadow-lg shadow-[#B21563]/30 transition-all hover:scale-105 active:scale-95"
       >
         ⚠️
       </button>
