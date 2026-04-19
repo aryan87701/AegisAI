@@ -1,7 +1,10 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { Plus, Search, PanelLeft, Paperclip, ArrowUp, Zap, Heart, CheckCircle, Clock, Users, Shield, MessageSquare, Bot, X } from "lucide-react";
+import {
+  Plus, Search, PanelLeft, Paperclip, ArrowUp, Zap, Heart,
+  CheckCircle, Clock, Users, Shield, MessageSquare, Bot, X
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
@@ -16,7 +19,7 @@ interface ChatSession {
   id: string;
   title: string;
   messages: Message[];
-  isLoaded: boolean; // Whether full messages have been fetched from DB
+  isLoaded: boolean;
 }
 
 interface UserRecord {
@@ -34,12 +37,12 @@ interface ChatbotSectionProps {
 
 // --- Mood Constants ---
 const MOOD_EMOJIS = [
-  { emoji: "😄", label: "Great", weight: 0 },
-  { emoji: "🙂", label: "Good", weight: 1 },
-  { emoji: "😐", label: "Okay", weight: 2 },
+  { emoji: "😄", label: "Great",     weight: 0 },
+  { emoji: "🙂", label: "Good",      weight: 1 },
+  { emoji: "😐", label: "Okay",      weight: 2 },
   { emoji: "😕", label: "Not great", weight: 3 },
-  { emoji: "😢", label: "Sad", weight: 4 },
-  { emoji: "😭", label: "Terrible", weight: 5 },
+  { emoji: "😢", label: "Sad",       weight: 4 },
+  { emoji: "😭", label: "Terrible",  weight: 5 },
 ];
 
 // --- AI Emotion → Emoji Mapper ---
@@ -58,33 +61,50 @@ function mapEmotionToEmoji(emotion: string): string {
 }
 
 export default function ChatbotSection({ userRecord, uid }: ChatbotSectionProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [chatSessions, setChatSessions] = useState<ChatSession[]>([]);
-  const [activeChatId, setActiveChatId] = useState<string>("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [inputValue, setInputValue] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
+  const [sidebarOpen, setSidebarOpen]     = useState(true);
+  const [chatSessions, setChatSessions]   = useState<ChatSession[]>([]);
+  const [activeChatId, setActiveChatId]   = useState<string>("");
+  const [searchQuery, setSearchQuery]     = useState("");
+  const [inputValue, setInputValue]       = useState("");
+  const [isTyping, setIsTyping]           = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef   = useRef<HTMLInputElement>(null);
+
+  // ── Refs for avoiding stale closures without extra deps ──────────────────
+  const chatSessionsRef = useRef<ChatSession[]>([]);   // mirrors chatSessions
+  const fetchedChatIds  = useRef<Set<string>>(new Set()); // gate: never re-fetch
+
+  // Keep mirror ref in sync
+  useEffect(() => {
+    chatSessionsRef.current = chatSessions;
+  }, [chatSessions]);
 
   // --- Mood State ---
-  const [showMoodModal, setShowMoodModal] = useState(false);
-  const [moodModalDismissed, setMoodModalDismissed] = useState(false);
+  const [showMoodModal, setShowMoodModal]             = useState(false);
+  const [moodModalDismissed, setMoodModalDismissed]   = useState(false);
   const [selectedMoodAnimation, setSelectedMoodAnimation] = useState<string | null>(null);
 
   const activeChat = chatSessions.find(c => c.id === activeChatId);
-  const messages = activeChat?.messages || [];
+  const messages   = activeChat?.messages || [];
 
-  // --- Create a fresh new chat session ---
+  // ── Create a fresh local chat session ────────────────────────────────────
   const createNewChat = useCallback(() => {
     const newId = Date.now().toString();
-    const newSession: ChatSession = { id: newId, title: "New Chat", messages: [], isLoaded: true };
+    const newSession: ChatSession = {
+      id: newId,
+      title: "New Chat",
+      messages: [],
+      isLoaded: true,
+    };
+    // Pre-mark so the fetch effect never tries to load it from DB
+    fetchedChatIds.current.add(newId);
     setChatSessions(prev => [newSession, ...prev]);
     setActiveChatId(newId);
     return newId;
   }, []);
 
-  // --- Fetch all chat session headers from DB on mount ---
+  // ── 1. Fetch session headers on mount (runs once) ─────────────────────────
   useEffect(() => {
     if (!uid) return;
 
@@ -98,7 +118,7 @@ export default function ChatbotSection({ userRecord, uid }: ChatbotSectionProps)
               id: s.chatId,
               title: s.title || "Untitled Chat",
               messages: [],
-              isLoaded: false, // Messages not yet fetched
+              isLoaded: false,
             }));
             setChatSessions(loadedSessions);
           }
@@ -107,24 +127,38 @@ export default function ChatbotSection({ userRecord, uid }: ChatbotSectionProps)
         console.error("Failed to fetch chat sessions:", err);
       }
 
-      // Always start with a fresh new chat regardless of history
+      // Always open on a fresh new chat
       const newId = Date.now().toString();
+      fetchedChatIds.current.add(newId); // pre-mark as loaded
       setChatSessions(prev => [
         { id: newId, title: "New Chat", messages: [], isLoaded: true },
-        ...prev
+        ...prev,
       ]);
       setActiveChatId(newId);
     };
 
     fetchSessions();
-  }, [uid]);
+  }, [uid]); // ← uid only — runs exactly once
 
-  // --- Fetch messages for a specific session when it becomes active ---
+  // ── 2. Fetch messages when user clicks a history session ──────────────────
+  //    NO chatSessions in deps — reads via ref instead
   useEffect(() => {
     if (!uid || !activeChatId) return;
 
-    const session = chatSessions.find(s => s.id === activeChatId);
-    if (!session || session.isLoaded) return;
+    // Gate: already fetched → skip
+    if (fetchedChatIds.current.has(activeChatId)) return;
+
+    // Read current sessions via ref (avoids chatSessions as dep)
+    const session = chatSessionsRef.current.find(s => s.id === activeChatId);
+
+    // Brand-new local session or already loaded → skip
+    if (!session || session.isLoaded) {
+      fetchedChatIds.current.add(activeChatId);
+      return;
+    }
+
+    // Mark BEFORE async call → prevents any double-fetch race
+    fetchedChatIds.current.add(activeChatId);
 
     const fetchMessages = async () => {
       try {
@@ -136,12 +170,14 @@ export default function ChatbotSection({ userRecord, uid }: ChatbotSectionProps)
             message: m.message,
             timestamp: new Date(m.timestamp),
           }));
-          
-          setChatSessions(prev => prev.map(s =>
-            s.id === activeChatId 
-              ? { ...s, messages: mapped, isLoaded: true, title: data.title || s.title }
-              : s
-          ));
+
+          setChatSessions(prev =>
+            prev.map(s =>
+              s.id === activeChatId
+                ? { ...s, messages: mapped, isLoaded: true, title: data.title || s.title }
+                : s
+            )
+          );
         }
       } catch (err) {
         console.error("Failed to fetch chat messages:", err);
@@ -149,16 +185,16 @@ export default function ChatbotSection({ userRecord, uid }: ChatbotSectionProps)
     };
 
     fetchMessages();
-  }, [uid, activeChatId, chatSessions]);
+  }, [uid, activeChatId]); // ← chatSessions intentionally NOT here
 
-  // --- Show mood modal on first load ---
+  // ── Show mood modal once per session ─────────────────────────────────────
   useEffect(() => {
     if (!moodModalDismissed && uid) {
       setShowMoodModal(true);
     }
   }, [uid, moodModalDismissed]);
 
-  // --- Record a mood event ---
+  // ── Record a mood event ───────────────────────────────────────────────────
   const recordMood = useCallback(async (emoji: string, source: "manual" | "ai") => {
     try {
       await fetch("/api/mood", {
@@ -181,15 +217,11 @@ export default function ChatbotSection({ userRecord, uid }: ChatbotSectionProps)
     }, 600);
   };
 
-  const handleAttachmentClick = () => {
-    fileInputRef.current?.click();
-  };
+  const handleAttachmentClick = () => fileInputRef.current?.click();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      console.log("Selected file:", file.name);
-    }
+    if (file) console.log("Selected file:", file.name);
   };
 
   const handleNewChat = () => {
@@ -199,15 +231,15 @@ export default function ChatbotSection({ userRecord, uid }: ChatbotSectionProps)
   };
 
   const presetQuestions = [
-    { text: "Are you safe right now?", icon: <Shield className="w-4 h-4 text-emerald-500" /> },
-    { text: "How has your day been today?", icon: <Clock className="w-4 h-4 text-blue-500" /> },
-    { text: "What happened recently to make you feel this way?", icon: <Zap className="w-4 h-4 text-amber-500" /> },
-    { text: "Is this a recurring issue or the first time?", icon: <CheckCircle className="w-4 h-4 text-purple-500" /> },
-    { text: "Is there someone nearby you trust to talk to?", icon: <Users className="w-4 h-4 text-cyan-500" /> },
-    { text: "Would you like to discuss your next steps or options?", icon: <Heart className="w-4 h-4 text-rose-500" /> },
+    { text: "Are you safe right now?",                            icon: <Shield      className="w-4 h-4 text-emerald-500" /> },
+    { text: "How has your day been today?",                       icon: <Clock       className="w-4 h-4 text-blue-500"    /> },
+    { text: "What happened recently to make you feel this way?",  icon: <Zap         className="w-4 h-4 text-amber-500"   /> },
+    { text: "Is this a recurring issue or the first time?",       icon: <CheckCircle className="w-4 h-4 text-purple-500"  /> },
+    { text: "Is there someone nearby you trust to talk to?",      icon: <Users       className="w-4 h-4 text-cyan-500"    /> },
+    { text: "Would you like to discuss your next steps or options?", icon: <Heart    className="w-4 h-4 text-rose-500"    /> },
   ];
 
-  // --- Save a single message to the DB for the active chat session ---
+  // ── Save a single message to DB ───────────────────────────────────────────
   const saveMessageToDb = async (msg: Message, title?: string) => {
     try {
       const res = await fetch("/api/chat", {
@@ -231,36 +263,34 @@ export default function ChatbotSection({ userRecord, uid }: ChatbotSectionProps)
     }
   };
 
+  // ── Send message ──────────────────────────────────────────────────────────
   const handleSend = async (text: string) => {
     if (!text.trim()) return;
 
     const userMsg: Message = { sender: "user", message: text, timestamp: new Date() };
-  
-    // Determine if this is the first message (set the chat title)
-    const isFirstMessage = messages.length === 0;
-    const newTitle = isFirstMessage ? text.slice(0, 30) + (text.length > 30 ? "..." : "") : undefined;
 
-    // Save to DB with title if first message
+    const isFirstMessage = messages.length === 0;
+    const newTitle = isFirstMessage
+      ? text.slice(0, 30) + (text.length > 30 ? "..." : "")
+      : undefined;
+
     saveMessageToDb(userMsg, newTitle);
-    
-    setChatSessions((prev) => prev.map(chat => {
-      if (chat.id === activeChatId) {
-        return { 
-          ...chat, 
-          title: newTitle || chat.title,
-          messages: [...chat.messages, userMsg] 
-        };
-      }
-      return chat;
-    }));
+
+    setChatSessions(prev =>
+      prev.map(chat =>
+        chat.id === activeChatId
+          ? { ...chat, title: newTitle || chat.title, messages: [...chat.messages, userMsg] }
+          : chat
+      )
+    );
 
     setInputValue("");
     setIsTyping(true);
 
     try {
-      const userInfoParts = [];
-      if (userRecord.age) userInfoParts.push(`Age: ${userRecord.age}`);
-      if (userRecord.gender) userInfoParts.push(`Gender: ${userRecord.gender}`);
+      const userInfoParts: string[] = [];
+      if (userRecord.age)           userInfoParts.push(`Age: ${userRecord.age}`);
+      if (userRecord.gender)        userInfoParts.push(`Gender: ${userRecord.gender}`);
       if (userRecord.maritalStatus) userInfoParts.push(`Marital Status: ${userRecord.maritalStatus}`);
       const userInfoStr = userInfoParts.join(", ") || "No additional profile info provided.";
 
@@ -268,7 +298,7 @@ export default function ChatbotSection({ userRecord, uid }: ChatbotSectionProps)
         .filter(msg => !msg.isError)
         .map(msg => ({
           role: msg.sender === "user" ? "user" : "assistant",
-          content: msg.message
+          content: msg.message,
         }));
 
       const res = await fetch("https://stress-ai-service-n783.onrender.com/analyze-chat", {
@@ -278,8 +308,8 @@ export default function ChatbotSection({ userRecord, uid }: ChatbotSectionProps)
           user_id: `${uid}-${activeChatId}`,
           user_info: userInfoStr,
           message: text,
-          history: history,
-          memory_summary: "" 
+          history,
+          memory_summary: "",
         }),
       });
 
@@ -291,19 +321,23 @@ export default function ChatbotSection({ userRecord, uid }: ChatbotSectionProps)
 
       const data = await res.json();
 
-      const botMsg: Message = { 
-        sender: "bot", 
-        message: data.response || "I'm sorry, I couldn't process that request.", 
-        timestamp: new Date() 
+      const botMsg: Message = {
+        sender: "bot",
+        message: data.response || "I'm sorry, I couldn't process that request.",
+        timestamp: new Date(),
       };
 
       saveMessageToDb(botMsg);
 
-      setChatSessions((prev) => prev.map(chat => 
-        chat.id === activeChatId ? { ...chat, messages: [...chat.messages, botMsg] } : chat
-      ));
+      setChatSessions(prev =>
+        prev.map(chat =>
+          chat.id === activeChatId
+            ? { ...chat, messages: [...chat.messages, botMsg] }
+            : chat
+        )
+      );
 
-      // Save Analysis results
+      // Save analysis
       if (data.stress_score !== undefined) {
         fetch("/api/chat/analysis", {
           method: "POST",
@@ -312,74 +346,79 @@ export default function ChatbotSection({ userRecord, uid }: ChatbotSectionProps)
             uid,
             aiResponse: data.response,
             stressLevel: data.risk || "low",
-            legalAdvice: "Analysis based on stress risk level: " + (data.risk || "low")
+            legalAdvice: "Analysis based on stress risk level: " + (data.risk || "low"),
           }),
         }).catch(err => console.error("Failed to save analysis:", err));
       }
 
       // AI Emotion → Mood Tracking
-      if (data.emotions && Array.isArray(data.emotions) && data.emotions.length > 0) {
+      if (Array.isArray(data.emotions) && data.emotions.length > 0) {
         for (const emotion of data.emotions) {
-          const mappedEmoji = mapEmotionToEmoji(emotion);
-          recordMood(mappedEmoji, "ai");
+          recordMood(mapEmotionToEmoji(emotion), "ai");
         }
       }
 
-      console.log("Chat Analysis:", { 
-        emotions: data.emotions, 
-        stress_score: data.stress_score, 
-        risk: data.risk 
+      console.log("Chat Analysis:", {
+        emotions: data.emotions,
+        stress_score: data.stress_score,
+        risk: data.risk,
       });
 
     } catch (error: any) {
       console.error("Chatbot Error:", error);
-      
+
       let rescuedMessage = "I encountered an error connecting to my safety service. Please try again soon.";
       const errorStr = error.toString();
 
       if (errorStr.includes("RESOURCE_EXHAUSTED") || errorStr.includes("429")) {
-        rescuedMessage = "⏳ The AI service has reached its daily request limit. Please try again later or ask your admin to upgrade the API plan.";
+        rescuedMessage = "⏳ The AI service has reached its daily request limit. Please try again later.";
       } else if (errorStr.includes("AI returned malformed JSON") && errorStr.includes("model response:")) {
         const parts = errorStr.split("model response:");
         if (parts.length > 1) {
           rescuedMessage = parts[1].trim()
-            .replace(/\\n/g, ' ')
-            .replace(/^"/, '')
-            .replace(/"$/, '')
-            .replace(/}$/, '')
+            .replace(/\\n/g, " ")
+            .replace(/^"/, "").replace(/"$/, "").replace(/}$/, "")
             .trim();
         }
       }
 
-      const errorMsg: Message = { 
-        sender: "bot", 
-        message: rescuedMessage, 
+      const errorMsg: Message = {
+        sender: "bot",
+        message: rescuedMessage,
         timestamp: new Date(),
-        isError: true
+        isError: true,
       };
-      
-      setChatSessions((prev) => prev.map(chat => 
-        chat.id === activeChatId ? { ...chat, messages: [...chat.messages, errorMsg] } : chat
-      ));
+
+      setChatSessions(prev =>
+        prev.map(chat =>
+          chat.id === activeChatId
+            ? { ...chat, messages: [...chat.messages, errorMsg] }
+            : chat
+        )
+      );
     } finally {
       setIsTyping(false);
     }
   };
 
+  // ── Auto-scroll ───────────────────────────────────────────────────────────
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isTyping]);
 
-  const filteredChats = chatSessions.filter(chat => chat.title.toLowerCase().includes(searchQuery.toLowerCase()));
+  const filteredChats = chatSessions.filter(chat =>
+    chat.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
+  // ── JSX ───────────────────────────────────────────────────────────────────
   return (
     <div className="flex h-[calc(100vh-120px)] w-full rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#121212] shadow-sm">
-      
-      {/* ====== MOOD CHECK-IN MODAL ====== */}
+
+      {/* ── Mood Modal ── */}
       {showMoodModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="relative bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 p-8 max-w-md w-full mx-4 animate-in zoom-in-95 duration-300">
-            <button 
+            <button
               onClick={() => { setShowMoodModal(false); setMoodModalDismissed(true); }}
               className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
             >
@@ -404,8 +443,8 @@ export default function ChatbotSection({ userRecord, uid }: ChatbotSectionProps)
                   key={emoji}
                   onClick={() => handleMoodSelect(emoji)}
                   className={`group relative flex flex-col items-center gap-2 py-4 px-3 rounded-xl border transition-all duration-200
-                    ${selectedMoodAnimation === emoji 
-                      ? "bg-[#B21563]/10 dark:bg-[#B21563]/20 border-[#B21563] scale-110 shadow-lg shadow-[#B21563]/20" 
+                    ${selectedMoodAnimation === emoji
+                      ? "bg-[#B21563]/10 dark:bg-[#B21563]/20 border-[#B21563] scale-110 shadow-lg shadow-[#B21563]/20"
                       : "border-zinc-200 dark:border-zinc-700 hover:border-[#B21563]/50 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 hover:scale-105 active:scale-95"
                     }`}
                 >
@@ -426,37 +465,35 @@ export default function ChatbotSection({ userRecord, uid }: ChatbotSectionProps)
         </div>
       )}
 
-      {/* Sidebar */}
+      {/* ── Sidebar ── */}
       <div className={`${sidebarOpen ? "w-64" : "w-16"} flex-shrink-0 border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-[#0a0a0a] flex flex-col transition-all duration-300 overflow-hidden`}>
         <div className={`p-4 flex items-center ${sidebarOpen ? "justify-between" : "justify-center"}`}>
           {sidebarOpen ? (
-            <>
-              <div className="flex items-center gap-2 text-zinc-900 dark:text-zinc-100 font-bold text-lg">
-                <div className="p-1 rounded bg-[#B21563]">
-                  <MessageSquare className="w-5 h-5 text-white" />
-                </div>
-                Chat
+            <div className="flex items-center gap-2 text-zinc-900 dark:text-zinc-100 font-bold text-lg">
+              <div className="p-1 rounded bg-[#B21563]">
+                <MessageSquare className="w-5 h-5 text-white" />
               </div>
-            </>
+              Chat
+            </div>
           ) : (
             <div className="p-1 rounded bg-[#B21563] cursor-pointer" onClick={() => setSidebarOpen(true)}>
               <MessageSquare className="w-5 h-5 text-white" />
             </div>
           )}
         </div>
-        
-        <div className={`px-4 pb-4 flex flex-col ${sidebarOpen ? 'gap-3' : 'gap-4 items-center'}`}>
+
+        <div className={`px-4 pb-4 flex flex-col ${sidebarOpen ? "gap-3" : "gap-4 items-center"}`}>
           {sidebarOpen ? (
             <>
               <div className="relative">
-                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-                 <input 
-                   type="text" 
-                   value={searchQuery}
-                   onChange={e => setSearchQuery(e.target.value)}
-                   className="w-full bg-zinc-200 dark:bg-zinc-800 border-none rounded-md py-2 pl-9 pr-3 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#B21563]"
-                   placeholder="Search history..."
-                 />
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  className="w-full bg-zinc-200 dark:bg-zinc-800 border-none rounded-md py-2 pl-9 pr-3 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:ring-1 focus:ring-[#B21563]"
+                  placeholder="Search history..."
+                />
               </div>
               <Button onClick={handleNewChat} className="w-full bg-[#B21563] hover:bg-[#911050] text-white flex gap-2 items-center justify-center rounded-lg">
                 <Plus className="w-4 h-4" />
@@ -480,10 +517,14 @@ export default function ChatbotSection({ userRecord, uid }: ChatbotSectionProps)
             <>
               <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 px-2 pt-2 pb-1">Recent</div>
               {filteredChats.map(chat => (
-                <div 
-                  key={chat.id} 
+                <div
+                  key={chat.id}
                   onClick={() => setActiveChatId(chat.id)}
-                  className={`px-3 py-2 text-sm rounded-md cursor-pointer truncate transition-colors ${activeChatId === chat.id ? "bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-medium" : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50"}`}
+                  className={`px-3 py-2 text-sm rounded-md cursor-pointer truncate transition-colors ${
+                    activeChatId === chat.id
+                      ? "bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-medium"
+                      : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50"
+                  }`}
                 >
                   {chat.title}
                 </div>
@@ -493,12 +534,12 @@ export default function ChatbotSection({ userRecord, uid }: ChatbotSectionProps)
         </div>
       </div>
 
-      {/* Main Chat Area */}
+      {/* ── Main Chat Area ── */}
       <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-[#121212] relative">
         <div className="absolute top-4 left-4 z-10">
-          <Button 
-            variant="ghost" 
-            size="icon" 
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={() => setSidebarOpen(!sidebarOpen)}
             className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
           >
@@ -508,24 +549,28 @@ export default function ChatbotSection({ userRecord, uid }: ChatbotSectionProps)
 
         {messages.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center p-6 mt-12">
-            <h1 className="text-4xl font-bold text-zinc-900 dark:text-white mb-8 tracking-tight">Good afternoon</h1>
-            
+            <h1 className="text-4xl font-bold text-zinc-900 dark:text-white mb-8 tracking-tight">
+              Good afternoon
+            </h1>
+
             <div className="w-full max-w-2xl relative">
               <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
               <div className="relative flex items-center w-full border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900/50 rounded-xl px-4 py-3 shadow-sm focus-within:ring-2 focus-within:ring-[#B21563]/50 transition-all">
                 <Paperclip onClick={handleAttachmentClick} className="w-5 h-5 text-zinc-400 mr-2 cursor-pointer hover:text-zinc-600 dark:hover:text-zinc-300" />
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSend(inputValue)}
+                  onChange={e => setInputValue(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && handleSend(inputValue)}
                   placeholder="Type your message here..."
                   className="flex-1 bg-transparent border-none outline-none text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500"
                 />
-                <Button 
-                  size="icon" 
+                <Button
+                  size="icon"
                   className={`ml-2 h-8 w-8 rounded-md transition-colors ${
-                    inputValue.trim() ? "bg-[#B21563] text-white hover:bg-[#911050]" : "bg-black text-white dark:bg-white dark:text-black pointer-events-none opacity-50"
+                    inputValue.trim()
+                      ? "bg-[#B21563] text-white hover:bg-[#911050]"
+                      : "bg-black text-white dark:bg-white dark:text-black pointer-events-none opacity-50"
                   }`}
                   onClick={() => handleSend(inputValue)}
                 >
@@ -535,7 +580,7 @@ export default function ChatbotSection({ userRecord, uid }: ChatbotSectionProps)
 
               <div className="flex flex-wrap gap-2 mt-6 justify-center">
                 {presetQuestions.map((q, i) => (
-                  <button 
+                  <button
                     key={i}
                     onClick={() => handleSend(q.text)}
                     className="flex items-center gap-2 px-3 py-2 text-xs font-medium text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 rounded-full hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
@@ -557,13 +602,11 @@ export default function ChatbotSection({ userRecord, uid }: ChatbotSectionProps)
                       <Bot className="w-5 h-5 m-auto text-white" />
                     </Avatar>
                   )}
-                  <div 
-                    className={`px-4 py-3 max-w-[80%] rounded-2xl ${
-                      msg.sender === "user" 
-                        ? "bg-[#B21563] text-white rounded-tr-sm" 
-                        : "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-tl-sm border border-zinc-200 dark:border-zinc-700"
-                    }`}
-                  >
+                  <div className={`px-4 py-3 max-w-[80%] rounded-2xl ${
+                    msg.sender === "user"
+                      ? "bg-[#B21563] text-white rounded-tr-sm"
+                      : "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 rounded-tl-sm border border-zinc-200 dark:border-zinc-700"
+                  }`}>
                     <p className="whitespace-pre-wrap text-sm leading-relaxed">{msg.message}</p>
                   </div>
                   {msg.sender === "user" && (
@@ -573,16 +616,16 @@ export default function ChatbotSection({ userRecord, uid }: ChatbotSectionProps)
                   )}
                 </div>
               ))}
-              
+
               {isTyping && (
                 <div className="flex gap-4 justify-start">
                   <Avatar className="w-8 h-8 rounded shrink-0 bg-[#B21563]">
                     <Bot className="w-5 h-5 m-auto text-white" />
                   </Avatar>
                   <div className="px-4 py-3 bg-zinc-100 dark:bg-zinc-800 rounded-2xl rounded-tl-sm border border-zinc-200 dark:border-zinc-700 flex items-center gap-1">
-                    <span className="w-2 h-2 bg-zinc-400 rounded-full animate-bounce [animation-delay:-0.3s]"></span>
-                    <span className="w-2 h-2 bg-zinc-400 rounded-full animate-bounce [animation-delay:-0.15s]"></span>
-                    <span className="w-2 h-2 bg-zinc-400 rounded-full animate-bounce"></span>
+                    <span className="w-2 h-2 bg-zinc-400 rounded-full animate-bounce [animation-delay:-0.3s]" />
+                    <span className="w-2 h-2 bg-zinc-400 rounded-full animate-bounce [animation-delay:-0.15s]" />
+                    <span className="w-2 h-2 bg-zinc-400 rounded-full animate-bounce" />
                   </div>
                 </div>
               )}
@@ -593,18 +636,20 @@ export default function ChatbotSection({ userRecord, uid }: ChatbotSectionProps)
               <div className="max-w-4xl mx-auto relative flex items-center w-full border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900/50 rounded-xl px-4 py-3 shadow-sm focus-within:ring-2 focus-within:ring-[#B21563]/50 transition-all">
                 <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
                 <Paperclip onClick={handleAttachmentClick} className="w-5 h-5 text-zinc-400 mr-2 cursor-pointer hover:text-zinc-600 dark:hover:text-zinc-300" />
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSend(inputValue)}
+                  onChange={e => setInputValue(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && handleSend(inputValue)}
                   placeholder="Type your message here..."
                   className="flex-1 bg-transparent border-none outline-none text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500"
                 />
-                <Button 
-                  size="icon" 
+                <Button
+                  size="icon"
                   className={`ml-2 h-8 w-8 rounded-md transition-colors ${
-                    inputValue.trim() ? "bg-[#B21563] text-white hover:bg-[#911050]" : "bg-black text-white dark:bg-white dark:text-black pointer-events-none opacity-50"
+                    inputValue.trim()
+                      ? "bg-[#B21563] text-white hover:bg-[#911050]"
+                      : "bg-black text-white dark:bg-white dark:text-black pointer-events-none opacity-50"
                   }`}
                   onClick={() => handleSend(inputValue)}
                 >
