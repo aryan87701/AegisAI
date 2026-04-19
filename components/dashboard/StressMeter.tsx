@@ -331,6 +331,15 @@ const StressMeter = ({ uid }: StressMeterProps) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastFetched, setLastFetched] = useState<Date | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  // ── Detect screen size ────────────────────────────────────────────────────
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768);
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   // ── Fetch & process mood history ──────────────────────────────────────────
   const fetchMoodData = useCallback(async () => {
@@ -402,6 +411,10 @@ const StressMeter = ({ uid }: StressMeterProps) => {
 
   const maxWellbeing = Math.max(...days.map((d) => d.wellbeingScore), 1);
 
+  // Visible timeframe
+  const visibleDays = isMobile ? days.slice(-7) : days;
+  const timeframeLabel = isMobile ? "Last 7 Days" : "Last 30 Days";
+
   // 7-day average stress
   const last7 = days.slice(-7).filter((d) => d.totalEvents > 0);
   const avg7StressIndex =
@@ -462,7 +475,7 @@ const StressMeter = ({ uid }: StressMeterProps) => {
             Stress Detection
           </h2>
           <p className="text-sm text-zinc-500 mt-0.5">
-            Last 30 days · Click any bar to inspect that day
+            {timeframeLabel} · Click any bar to inspect
           </p>
         </div>
 
@@ -576,7 +589,7 @@ const StressMeter = ({ uid }: StressMeterProps) => {
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-2">
             <Calendar className="w-4 h-4 text-[#B21563]" />
-            30-Day Wellbeing Overview
+            {timeframeLabel} Wellbeing Overview
           </h3>
           <div className="flex items-center gap-1 text-xs text-zinc-400">
             <Info className="w-3 h-3" />
@@ -584,9 +597,9 @@ const StressMeter = ({ uid }: StressMeterProps) => {
           </div>
         </div>
 
-        {/* Month label bands — split into weeks */}
-        <div className="flex gap-0.5 mb-2">
-          {days.map((day) => (
+        {/* Month label bands */}
+        <div className="flex gap-0.5 mb-2 px-1">
+          {visibleDays.map((day) => (
             <div
               key={day.date}
               className={`flex-1 text-center text-[8px] font-medium
@@ -599,8 +612,8 @@ const StressMeter = ({ uid }: StressMeterProps) => {
         </div>
 
         {/* Bars */}
-        <div className="flex gap-0.5 items-end w-full">
-          {days.map((day) => (
+        <div className="flex gap-1 md:gap-0.5 items-end w-full px-1">
+          {visibleDays.map((day) => (
             <DayBar
               key={day.date}
               day={day}
@@ -612,17 +625,24 @@ const StressMeter = ({ uid }: StressMeterProps) => {
           ))}
         </div>
 
-        {/* X-axis: week separators */}
+        {/* X-axis labels */}
         <div className="flex mt-3 text-[10px] text-zinc-400">
-          {[0, 7, 14, 21, 29].map((i) => (
-            <div
-              key={i}
-              className="flex-1 text-left pl-0.5 border-l border-zinc-200 dark:border-zinc-700"
-              style={{ marginLeft: i === 0 ? 0 : undefined }}
-            >
-              {days[i]?.label.split(" ")[0]}
-            </div>
-          ))}
+          {isMobile ? (
+             visibleDays.map((day) => (
+               <div key={day.date} className="flex-1 text-center font-medium">
+                 {day.label.split(" ")[0]}
+               </div>
+             ))
+          ) : (
+            [0, 7, 14, 21, 29].map((i) => (
+              <div
+                key={i}
+                className="flex-1 text-left pl-0.5 border-l border-zinc-200 dark:border-zinc-700"
+              >
+                {days[i]?.label.split(" ")[0]}
+              </div>
+            ))
+          )}
         </div>
       </div>
 
