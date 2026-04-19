@@ -44,7 +44,6 @@ const UserSchema = new mongoose.Schema(
   type: [String],
   default: []
 },
-
 emergencyMessage: {
   type: String,
   default: "I need help. Please reach me."
