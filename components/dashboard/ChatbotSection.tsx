@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   Plus, Search, PanelLeft, Paperclip, ArrowUp, Zap, Heart,
-  CheckCircle, Clock, Users, Shield, MessageSquare, Bot, X
+  CheckCircle, Clock, Users, Shield, MessageSquare, Bot, X, Menu
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -67,6 +67,13 @@ export default function ChatbotSection({ userRecord, uid }: ChatbotSectionProps)
   const [searchQuery, setSearchQuery]     = useState("");
   const [inputValue, setInputValue]       = useState("");
   const [isTyping, setIsTyping]           = useState(false);
+
+  // Default sidebar to closed on mobile
+  useEffect(() => {
+    if (window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
+  }, []);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef   = useRef<HTMLInputElement>(null);
@@ -466,18 +473,41 @@ export default function ChatbotSection({ userRecord, uid }: ChatbotSectionProps)
       )}
 
       {/* ── Sidebar ── */}
-      <div className={`${sidebarOpen ? "w-64" : "w-16"} flex-shrink-0 border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-[#0a0a0a] flex flex-col transition-all duration-300 overflow-hidden`}>
+      <div className={`
+        ${sidebarOpen 
+          ? "w-full absolute inset-0 z-20 bg-white dark:bg-[#0a0a0a]" 
+          : "w-12 md:w-16 bg-zinc-50 dark:bg-[#0a0a0a]"} 
+        md:relative md:w-auto ${sidebarOpen ? "md:w-64" : "md:w-16"}
+        flex-shrink-0 border-r border-zinc-200 dark:border-zinc-800 flex flex-col transition-all duration-300 overflow-hidden
+      `}>
         <div className={`p-4 flex items-center ${sidebarOpen ? "justify-between" : "justify-center"}`}>
           {sidebarOpen ? (
-            <div className="flex items-center gap-2 text-zinc-900 dark:text-zinc-100 font-bold text-lg">
-              <div className="p-1 rounded bg-[#B21563]">
+            <>
+              <div className="flex items-center gap-2 text-zinc-900 dark:text-zinc-100 font-bold text-lg">
+                <div className="p-1 rounded bg-[#B21563]">
+                  <MessageSquare className="w-5 h-5 text-white" />
+                </div>
+                Chat
+              </div>
+              {/* Close button for mobile overlay */}
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="md:hidden text-zinc-500" 
+                onClick={() => setSidebarOpen(false)}
+              >
+                <X className="w-5 h-5" />
+              </Button>
+            </>
+          ) : (
+            <div className="cursor-pointer" onClick={() => setSidebarOpen(true)}>
+              {/* Show Hamburger on mobile when collapsed, otherwise logo */}
+              <div className="md:hidden">
+                <Menu className="w-6 h-6 text-zinc-600 dark:text-zinc-400" />
+              </div>
+              <div className="hidden md:block p-1 rounded bg-[#B21563]">
                 <MessageSquare className="w-5 h-5 text-white" />
               </div>
-              Chat
-            </div>
-          ) : (
-            <div className="p-1 rounded bg-[#B21563] cursor-pointer" onClick={() => setSidebarOpen(true)}>
-              <MessageSquare className="w-5 h-5 text-white" />
             </div>
           )}
         </div>
@@ -501,14 +531,14 @@ export default function ChatbotSection({ userRecord, uid }: ChatbotSectionProps)
               </Button>
             </>
           ) : (
-            <>
+            <div className="hidden md:flex flex-col gap-4 items-center">
               <Button onClick={() => setSidebarOpen(true)} size="icon" variant="ghost" className="w-10 h-10 rounded-full text-zinc-500 hover:text-zinc-900 hover:bg-zinc-200/50 dark:hover:text-zinc-100 dark:hover:bg-zinc-800/50 self-center shrink-0 transition-colors" title="Search">
                 <Search className="w-5 h-5" />
               </Button>
               <Button onClick={handleNewChat} size="icon" className="w-10 h-10 rounded-xl bg-[#B21563] hover:bg-[#911050] text-white self-center shrink-0 shadow-sm transition-all hover:scale-105 active:scale-95" title="New Chat">
                 <Plus className="w-5 h-5" />
               </Button>
-            </>
+            </div>
           )}
         </div>
 
@@ -536,7 +566,7 @@ export default function ChatbotSection({ userRecord, uid }: ChatbotSectionProps)
 
       {/* ── Main Chat Area ── */}
       <div className="flex-1 flex flex-col min-w-0 bg-white dark:bg-[#121212] relative">
-        <div className="absolute top-4 left-4 z-10">
+        <div className="absolute top-4 left-4 z-10 hidden md:block">
           <Button
             variant="ghost"
             size="icon"
@@ -553,32 +583,9 @@ export default function ChatbotSection({ userRecord, uid }: ChatbotSectionProps)
               Good afternoon
             </h1>
 
-            <div className="w-full max-w-2xl relative">
-              <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
-              <div className="relative flex items-center w-full border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900/50 rounded-xl px-4 py-3 shadow-sm focus-within:ring-2 focus-within:ring-[#B21563]/50 transition-all">
-                <Paperclip onClick={handleAttachmentClick} className="w-5 h-5 text-zinc-400 mr-2 cursor-pointer hover:text-zinc-600 dark:hover:text-zinc-300" />
-                <input
-                  type="text"
-                  value={inputValue}
-                  onChange={e => setInputValue(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && handleSend(inputValue)}
-                  placeholder="Type your message here..."
-                  className="flex-1 bg-transparent border-none outline-none text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500"
-                />
-                <Button
-                  size="icon"
-                  className={`ml-2 h-8 w-8 rounded-md transition-colors ${
-                    inputValue.trim()
-                      ? "bg-[#B21563] text-white hover:bg-[#911050]"
-                      : "bg-black text-white dark:bg-white dark:text-black pointer-events-none opacity-50"
-                  }`}
-                  onClick={() => handleSend(inputValue)}
-                >
-                  <ArrowUp className="w-4 h-4" />
-                </Button>
-              </div>
-
-              <div className="flex flex-wrap gap-2 mt-6 justify-center">
+            <div className="w-full max-w-2xl relative flex flex-col md:flex-col-reverse items-center">
+              {/* Preset Questions - Above Input on Mobile, Below Input on Desktop */}
+              <div className="flex flex-wrap gap-2 my-6 md:mt-6 md:mb-0 justify-center">
                 {presetQuestions.map((q, i) => (
                   <button
                     key={i}
@@ -589,6 +596,33 @@ export default function ChatbotSection({ userRecord, uid }: ChatbotSectionProps)
                     {q.text}
                   </button>
                 ))}
+              </div>
+
+              {/* Message Input Area */}
+              <div className="w-full">
+                <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileChange} />
+                <div className="relative flex items-center w-full border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900/50 rounded-xl px-4 py-3 shadow-sm focus-within:ring-2 focus-within:ring-[#B21563]/50 transition-all">
+                  <Paperclip onClick={handleAttachmentClick} className="w-5 h-5 text-zinc-400 mr-2 cursor-pointer hover:text-zinc-600 dark:hover:text-zinc-300" />
+                  <input
+                    type="text"
+                    value={inputValue}
+                    onChange={e => setInputValue(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && handleSend(inputValue)}
+                    placeholder="Type your message here..."
+                    className="flex-1 bg-transparent border-none outline-none text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-500"
+                  />
+                  <Button
+                    size="icon"
+                    className={`ml-2 h-8 w-8 rounded-md transition-colors ${
+                      inputValue.trim()
+                        ? "bg-[#B21563] text-white hover:bg-[#911050]"
+                        : "bg-black text-white dark:bg-white dark:text-black pointer-events-none opacity-50"
+                    }`}
+                    onClick={() => handleSend(inputValue)}
+                  >
+                    <ArrowUp className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
