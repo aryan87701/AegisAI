@@ -2,14 +2,15 @@ import { NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
 import User from "@/models/User";
 import Summary from "@/models/Response.model";
+import { generateSummaryForUser } from "@/lib/cron-handler";
 
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { uid, aiResponse, stressLevel, legalAdvice } = body;
+    const { uid, aiResponse, stressLevel, legalAdvice, triggerSummary } = body;
 
-    if (!uid || !aiResponse || !stressLevel) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    if (!uid) {
+      return NextResponse.json({ error: "Missing UID" }, { status: 400 });
     }
 
     await dbConnect();
@@ -22,76 +23,35 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    // 2. Prepare payload for External Daily Summary API
-    // Convert Mongoose Map to plain object
-    const oldSummaryObj = Object.fromEntries(user.summaryMap || new Map());
-
-    const externalApiUrl = "https://stress-ai-service-n783.onrender.com/daily-summary";
-    const externalPayload = {
-      user_id: uid,
-      date: today,
-      messages: [
-        {
-          role: "user",
-          content: body.userMessage || "",
-          timestamp: now.toISOString()
-        },
-        {
-          role: "assistant",
-          content: aiResponse,
-          timestamp: now.toISOString()
-        }
-      ],
-      old_summary: oldSummaryObj
-    };
-
     let updatedAnalysis = null;
-    try {
-      const extRes = await fetch(externalApiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(externalPayload)
+    
+    // 2. Handle Manual Summary Trigger (Live Sync)
+    if (triggerSummary) {
+      updatedAnalysis = await generateSummaryForUser(uid, today);
+    }
+
+    // 3. Save individual message analysis (if provided)
+    let newSummary = null;
+    if (aiResponse && stressLevel) {
+      newSummary = await Summary.create({
+        userId: user._id,
+        aiResponse,
+        stressLevel,
+        legalAdvice: legalAdvice || ""
       });
 
-      if (extRes.ok) {
-        updatedAnalysis = await extRes.json();
-      } else {
-        console.error("External Daily Summary API failed:", await extRes.text());
+      // Update basic stress metrics even if not triggering full summary
+      if (!triggerSummary) {
+        const currentAvg = user.avgStress || 0;
+        const count = user.totalAnalysisCount || 0;
+        const newScore = body.stressScore !== undefined ? body.stressScore : 0;
+        
+        user.avgStress = ((currentAvg * count) + newScore) / (count + 1);
+        user.totalAnalysisCount = count + 1;
+        user.riskTrend = body.riskTrend || user.riskTrend;
+        await user.save();
       }
-    } catch (err) {
-      console.error("Error calling External Daily Summary API:", err);
     }
-
-    // 3. Update User Record with cumulative data
-    if (updatedAnalysis) {
-      // Sync the summary map
-      if (updatedAnalysis.summary) {
-        Object.entries(updatedAnalysis.summary).forEach(([date, text]) => {
-          user.summaryMap.set(date, text);
-        });
-      }
-      
-      user.dominantEmotion = updatedAnalysis.dominant_emotion || user.dominantEmotion;
-      user.riskTrend = updatedAnalysis.risk_trend || user.riskTrend;
-      
-      // Update running average stress
-      const currentAvg = user.avgStress || 0;
-      const count = user.totalAnalysisCount || 0;
-      const newScore = body.stressScore !== undefined ? body.stressScore : (updatedAnalysis.avg_stress || 0);
-      
-      user.avgStress = ((currentAvg * count) + newScore) / (count + 1);
-      user.totalAnalysisCount = count + 1;
-
-      await user.save();
-    }
-
-    // 4. Create a history record in Summary model (Still keep it for audit)
-    const newSummary = await Summary.create({
-      userId: user._id,
-      aiResponse,
-      stressLevel,
-      legalAdvice: legalAdvice || ""
-    });
 
     return NextResponse.json({ 
       success: true, 

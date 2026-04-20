@@ -33,12 +33,18 @@ const latestSummary = summaryMap.get(latestDate);
 We use a native **TypeScript Background Worker** to ensure summaries are ready every morning:
 
 - **Technology**: Built using `node-cron` and integrated via Next.js `instrumentation.ts`.
-- **Logic**: At 12:00 AM UTC daily, the server automatically iterates through all users who had chat activity the previous day.
-- **Goal**: It calls the `/daily-summary` AI service to generate a final, semantic "Daily Wrap-up" for that day and saves it to the database.
-- **Reliability**: This ensures that even if a user closes their browser mid-conversation, the record in `summaryMap` is completed by midnight for the emergency system to use.
+- **Logic**: At 12:00 AM UTC daily, the server automatically iterates through all users who had chat activity the previous day and generates a final daily record.
+- **Token Efficiency**: This is the primary time summaries are generated, ensuring AI tokens are not wasted during active chat sessions.
 
-### Manual Trigger (Optional)
-If you need to force a summary update for a user without waiting for midnight, the frontend still triggers an incremental update to `/api/chat/analysis` after every single message.
+## Emergency Button "Live Sync"
+To ensure the emergency SMS is always up to date with the very latest information, the system performs a **Live Sync**:
+
+1.  **Trigger**: When the user clicks "Inform Contacts" in the Emergency modal.
+2.  **Action**: The frontend forces a call to `/api/chat/analysis` with `triggerSummary: true`.
+3.  **Result**: The AI service takes all of today's messages and creates a fresh summary *immediately* before the SMS is generated. 
+
+### Manual Trigger (Internal)
+Routine chat messages still log stress levels and individual analysis to the database for monitoring but **do not** trigger the expensive cumulative AI summary. This saves significant token costs without losing metadata.
 
 ## Formatting for SMS
 When sending an emergency SMS, you can format the data like this:

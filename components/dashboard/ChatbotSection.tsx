@@ -416,6 +416,7 @@ export default function ChatbotSection({ userRecord, uid }: ChatbotSectionProps)
             stressScore: data.stress_score,
             stressLevel: data.risk || "low",
             riskTrend: data.risk_trend || "stable",
+            triggerSummary: false,
             legalAdvice: "Analysis based on stress risk level: " + (data.risk || "low"),
           }),
         }).catch(err => console.error("Failed to save analysis:", err));

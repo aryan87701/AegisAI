@@ -222,6 +222,22 @@ const sendSequentialSMS = async (contacts: string[], message: string) => {
       return;
     }
 
+    // 🔥 LIVE SYNC: Trigger summary generation right before sending SMS
+    try {
+      await fetch("/api/chat/analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          uid: currentUser.uid, 
+          triggerSummary: true,
+          aiResponse: "EMERGENCY_TRIGGERED", // Dummy values to pass validation
+          stressLevel: "high" 
+        })
+      });
+    } catch (err) {
+      console.error("Live Sync failed, proceeding with existing summary:", err);
+    }
+
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         try {
