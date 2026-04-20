@@ -44,10 +44,32 @@ const UserSchema = new mongoose.Schema(
   type: [String],
   default: []
 },
-emergencyMessage: {
-  type: String,
-  default: "I need help. Please reach me."
-}
+    emergencyMessage: {
+      type: String,
+      default: "I need help. Please reach me."
+    },
+    // 🔥 CUMULATIVE SUMMARY & ANALYSIS
+    summaryMap: {
+      type: Map,
+      of: String,
+      default: {}
+    },
+    dominantEmotion: {
+      type: String,
+      default: ""
+    },
+    avgStress: {
+      type: Number,
+      default: 0
+    },
+    riskTrend: {
+      type: String,
+      default: ""
+    },
+    totalAnalysisCount: {
+      type: Number,
+      default: 0
+    }
   },
   { timestamps: true }
 );

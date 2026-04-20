@@ -28,6 +28,10 @@ interface UserRecord {
   gender?: string;
   maritalStatus?: string;
   profilePicUrl?: string;
+  summaryMap?: Record<string, string>;
+  dominantEmotion?: string;
+  avgStress?: number;
+  riskTrend?: string;
 }
 
 interface ChatbotSectionProps {
@@ -366,7 +370,13 @@ export default function ChatbotSection({ userRecord, uid }: ChatbotSectionProps)
           user_info: userInfoStr,
           message: text,
           history,
-          memory_summary: "",
+          memory_summary: userRecord.summaryMap 
+            ? Object.entries(userRecord.summaryMap)
+                .sort((a,b) => b[0].localeCompare(a[0])) // latest first
+                .slice(0, 3) // last 3 days
+                .map(([date, text]) => `${date}: ${text}`)
+                .join("\n")
+            : "",
         }),
       });
 
@@ -395,14 +405,17 @@ export default function ChatbotSection({ userRecord, uid }: ChatbotSectionProps)
       );
 
       // Save analysis
-      if (data.stress_score !== undefined) {
+      if (data.stress_score !== undefined || data.response) {
         fetch("/api/chat/analysis", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             uid,
+            userMessage: text,
             aiResponse: data.response,
+            stressScore: data.stress_score,
             stressLevel: data.risk || "low",
+            riskTrend: data.risk_trend || "stable",
             legalAdvice: "Analysis based on stress risk level: " + (data.risk || "low"),
           }),
         }).catch(err => console.error("Failed to save analysis:", err));

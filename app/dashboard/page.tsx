@@ -36,6 +36,10 @@ interface UserRecord {
     profilePicUrl?: string;
     secretKey?: string;
     isProfileComplete?: boolean;
+    summaryMap?: Record<string, string>;
+    dominantEmotion?: string;
+    avgStress?: number;
+    riskTrend?: string;
 }
 
 export default function DashboardPage() {
